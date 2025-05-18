@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MiniCompiler Web Interface</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Fira Code', monospace;
+      text-align: center;
+      background-image: url('k.jpg');
+      background-size: cover;
+      background-attachment: fixed;
+      color: #f0f0f0;
+      margin: 0;
+      height:1500px;
+
+    }
+
+    header {
+      background-color: rgba(0, 0, 0, 0.7);
+      padding: 30px;
+    }
+
+    header img {
+      max-height: 80px;
+      vertical-align: middle;
+    }
+
+    h1 {
+      margin: 10px;
+      font-size: 2.5em;
+    }
+
+    textarea {
+      width: 80%;
+      height: 220px;
+      background: #1e1e1e;
+      color: #00ffcc;
+      border: 2px solid #555;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 1em;
+      margin-top: 20px;
+    }
+
+    .btn-group {
+      margin-top: 15px;
+    }
+
+    button {
+      background-color: #00bcd4;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 16px;
+      margin: 6px;
+      font-size: 1em;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #008c9e;
+    }
+
+    .output {
+      width: 80%;
+      background: #111;
+      color: #0f0;
+      text-align: left;
+      padding: 15px;
+      margin: 25px auto;
+      border-radius: 10px;
+      box-shadow: 0 0 10px #000;
+      white-space: pre-wrap;
+    }
+
+    .output-label {
+      font-weight: bold;
+      color: #76ff03;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .icon {
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="com.pmg.png" alt="Compiler Logo" style="width: 200px; height: 200px;">
+
+    <h1>MiniCompiler Web Interface</h1>
+  </header>
+
+  <textarea id="code" placeholder="Enter your code here..."></textarea>
+
+  <div class="btn-group">
+    <button onclick="compile('tokenize')"><span class="icon">🧩</span>Tokenize</button>
+    <button onclick="compile('parse')"><span class="icon">📐</span>Parse</button>
+    <button onclick="compile('semantic')"><span class="icon">🧠</span>Semantic Analysis</button>
+    <button onclick="compile('intermediate')"><span class="icon">⚙️</span>Intermediate Code</button>
+    <button onclick="compile('assembly')"><span class="icon">💾</span>Assembly Code</button>
+  </div>
+
+  <div class="output">
+    <span class="output-label">Output:</span>
+    <pre id="output">{{ output if output else '' }}</pre>
+  </div>
+
+  <script>
+    function compile(action) {
+      const code = document.getElementById("code").value;
+      document.getElementById("output").innerText = "Processing...";
+      fetch("/compile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ code: code, action: action }),
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          document.getElementById("output").innerText = data.output;
+        })
+        .catch((err) => {
+          document.getElementById("output").innerText = "Error: " + err;
+        });
+    }
+  </script>
+</body>
+</html>
