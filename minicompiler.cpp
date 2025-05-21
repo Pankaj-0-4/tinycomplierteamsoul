@@ -6,7 +6,10 @@
 #include <memory>
 #include <cctype>
 #include <cstring>
+#include <utility> // For std::move
+
 using namespace std;
+
 // Token types
 enum class TokenType {
     VAR, PRINT, IF, ELSE, RETURN,
@@ -50,15 +53,11 @@ private:
     size_t currentTokenIndex = 0;
     map<string, string> symbolTable;
     vector<string> errors;
-    vector<string> intermediateCode;
-    vector<string> assemblyCode;
     unique_ptr<ASTNode> ast;
 
     // Helper functions
     void addError(const string& error) { errors.push_back(error); }
     void addToken(TokenType type, const string& value, int line, int column) { tokens.emplace_back(type, value, line, column); }
-    void addIntermediateCode(const string& code) { intermediateCode.push_back(code); }
-    void addAssemblyCode(const string& code) { assemblyCode.push_back(code); }
     void addSymbol(const string& key, const string& value) { symbolTable[key] = value; }
     bool symbolExists(const string& key) const { return symbolTable.find(key) != symbolTable.end(); }
 
@@ -80,12 +79,6 @@ private:
 
     // Semantic Analysis
     void semanticAnalysis(ASTNode* node);
-
-    // Intermediate Code Generation
-    void generateIntermediateCode(ASTNode* node, int& tempCount, int& labelCount);
-
-    // Assembly Code Generation
-    void generateAssembly(ASTNode* node, int& regCount);
 
     // Print functions
     void printTokens() const;
@@ -118,8 +111,6 @@ void MiniCompiler::compile(const string& filename) {
     currentTokenIndex = 0;
     symbolTable.clear();
     errors.clear();
-    intermediateCode.clear();
-    assemblyCode.clear();
     ast.reset();
 
     cout << "=== Lexical Analysis (Tokenization) ===" << endl;
@@ -157,24 +148,6 @@ void MiniCompiler::compile(const string& filename) {
     cout << "\nSymbol Table:" << endl;
     for (const auto& entry : symbolTable) {
         cout << entry.first << ": " << entry.second << endl;
-    }
-
-    cout << "\n=== Intermediate Code Generation ===" << endl;
-    int tempCount = 0;
-    int labelCount = 0;
-    generateIntermediateCode(ast.get(), tempCount, labelCount);
-
-    cout << "\nIntermediate Code (Three-Address Code):" << endl;
-    for (size_t i = 0; i < intermediateCode.size(); i++) {
-        cout << i << ": " << intermediateCode[i] << endl;
-    }
-
-    cout << "\n=== Assembly Code Generation ===" << endl;
-    int regCount = 0;
-    generateAssembly(ast.get(), regCount);
-
-    for (const auto& code : assemblyCode) {
-        cout << code << endl;
     }
 
     cout << "\nCompilation successful!" << endl;
@@ -558,175 +531,6 @@ void MiniCompiler::semanticAnalysis(ASTNode* node) {
         for (const auto& child : node->children) {
             semanticAnalysis(child.get());
         }
-    }
-}
-
-void MiniCompiler::generateIntermediateCode(ASTNode* node, int& tempCount, int& labelCount) {
-    if (!node) return;
-
-    if (node->nodeType == "Program" || node->nodeType == "Block") {
-        for (const auto& child : node->children) {
-            generateIntermediateCode(child.get(), tempCount, labelCount);
-        }
-    }
-    else if (node->nodeType == "Declaration") {
-        if (!node->children.empty()) {
-            generateIntermediateCode(node->children[0].get(), tempCount, labelCount);
-            addIntermediateCode(node->value + " = " + node->children[0]->value);
-        } else {
-            addIntermediateCode(node->value + " = 0");
-        }
-    }
-    else if (node->nodeType == "NumberLiteral" || node->nodeType == "Identifier") {
-        // value is already set
-    }
-    else if (node->nodeType == "BinaryExpr") {
-        generateIntermediateCode(node->children[0].get(), tempCount, labelCount);
-        generateIntermediateCode(node->children[1].get(), tempCount, labelCount);
-
-        string resultTemp = "t" + to_string(tempCount++);
-        addIntermediateCode(resultTemp + " = " +
-                            node->children[0]->value + " " +
-                            node->value + " " +
-                            node->children[1]->value);
-        node->value = resultTemp;
-    }
-    else if (node->nodeType == "Print") {
-        generateIntermediateCode(node->children[0].get(), tempCount, labelCount);
-        addIntermediateCode("print " + node->children[0]->value);
-    }
-    else if (node->nodeType == "Return") {
-        generateIntermediateCode(node->children[0].get(), tempCount, labelCount);
-        addIntermediateCode("return " + node->children[0]->value);
-    }
-    else if (node->nodeType == "If") {
-        generateIntermediateCode(node->children[0].get(), tempCount, labelCount);
-        string labelEnd = "L" + to_string(labelCount++);
-        addIntermediateCode("ifFalse " + node->children[0]->value + " goto " + labelEnd);
-        generateIntermediateCode(node->children[1].get(), tempCount, labelCount);
-        addIntermediateCode(labelEnd + ":");
-    }
-    else if (node->nodeType == "IfElse") {
-        generateIntermediateCode(node->children[0].get(), tempCount, labelCount);
-        string labelElse = "L" + to_string(labelCount++);
-        string labelEnd = "L" + to_string(labelCount++);
-        addIntermediateCode("ifFalse " + node->children[0]->value + " goto " + labelElse);
-        generateIntermediateCode(node->children[1].get(), tempCount, labelCount);
-        addIntermediateCode("goto " + labelEnd);
-        addIntermediateCode(labelElse + ":");
-        generateIntermediateCode(node->children[2].get(), tempCount, labelCount);
-        addIntermediateCode(labelEnd + ":");
-    }
-}
-
-void MiniCompiler::generateAssembly(ASTNode* node, int& regCount) {
-    if (!node) return;
-
-    if (node->nodeType == "Program" || node->nodeType == "Block") {
-        for (const auto& child : node->children) {
-            generateAssembly(child.get(), regCount);
-        }
-    }
-    else if (node->nodeType == "Declaration") {
-        if (!node->children.empty()) {
-            if (node->children[0]->nodeType == "NumberLiteral") {
-                addAssemblyCode("mov [" + node->value + "], " + node->children[0]->value);
-            }
-            else if (node->children[0]->nodeType == "Identifier") {
-                addAssemblyCode("mov [" + node->value + "], [" + node->children[0]->value + "]");
-            }
-            else if (node->children[0]->nodeType == "BinaryExpr") {
-                generateAssembly(node->children[0].get(), regCount);
-                addAssemblyCode("mov [" + node->value + "], eax");
-            }
-        } else {
-            addAssemblyCode("mov [" + node->value + "], 0");
-        }
-    }
-    else if (node->nodeType == "NumberLiteral") {
-        addAssemblyCode("mov eax, " + node->value);
-    }
-    else if (node->nodeType == "Identifier") {
-        addAssemblyCode("mov eax, [" + node->value + "]");
-    }
-    else if (node->nodeType == "BinaryExpr") {
-        generateAssembly(node->children[0].get(), regCount);
-        addAssemblyCode("push eax");
-        generateAssembly(node->children[1].get(), regCount);
-        addAssemblyCode("mov ebx, eax");
-        addAssemblyCode("pop eax");
-
-        if (node->value == "+") {
-            addAssemblyCode("add eax, ebx");
-        }
-        else if (node->value == "-") {
-            addAssemblyCode("sub eax, ebx");
-        }
-        else if (node->value == "*") {
-            addAssemblyCode("imul eax, ebx");
-        }
-        else if (node->value == "/") {
-            addAssemblyCode("cdq");
-            addAssemblyCode("idiv ebx");
-        }
-        else if (node->value == "<") {
-            addAssemblyCode("cmp eax, ebx");
-            addAssemblyCode("setl al");
-            addAssemblyCode("movzx eax, al");
-        }
-        else if (node->value == ">") {
-            addAssemblyCode("cmp eax, ebx");
-            addAssemblyCode("setg al");
-            addAssemblyCode("movzx eax, al");
-        }
-        else if (node->value == "<=") {
-            addAssemblyCode("cmp eax, ebx");
-            addAssemblyCode("setle al");
-            addAssemblyCode("movzx eax, al");
-        }
-        else if (node->value == ">=") {
-            addAssemblyCode("cmp eax, ebx");
-            addAssemblyCode("setge al");
-            addAssemblyCode("movzx eax, al");
-        }
-        else if (node->value == "==") {
-            addAssemblyCode("cmp eax, ebx");
-            addAssemblyCode("sete al");
-            addAssemblyCode("movzx eax, al");
-        }
-        else if (node->value == "!=") {
-            addAssemblyCode("cmp eax, ebx");
-            addAssemblyCode("setne al");
-            addAssemblyCode("movzx eax, al");
-        }
-    }
-    else if (node->nodeType == "Print") {
-        generateAssembly(node->children[0].get(), regCount);
-        addAssemblyCode("print eax");
-    }
-    else if (node->nodeType == "Return") {
-        generateAssembly(node->children[0].get(), regCount);
-        addAssemblyCode("ret");
-    }
-    else if (node->nodeType == "If") {
-        generateAssembly(node->children[0].get(), regCount);
-        string labelEnd = "L" + to_string(regCount++);
-        addAssemblyCode("cmp eax, 0");
-        addAssemblyCode("je " + labelEnd);
-        generateAssembly(node->children[1].get(), regCount);
-        addAssemblyCode(labelEnd + ":");
-    }
-    else if (node->nodeType == "IfElse") {
-        generateAssembly(node->children[0].get(), regCount);
-        string labelElse = "L" + to_string(regCount++);
-        string labelEnd = "L" + to_string(regCount++);
-        addAssemblyCode("cmp eax, 0");
-        addAssemblyCode("je " + labelElse);
-        generateAssembly(node->children[1].get(), regCount);
-        addAssemblyCode("jmp " + labelEnd);
-        addAssemblyCode(labelElse + ":");
-        generateAssembly(node->children[2].get(), regCount);
-        addAssemblyCode(labelEnd + ":");
     }
 }
 
