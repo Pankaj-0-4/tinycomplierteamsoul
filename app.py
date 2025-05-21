@@ -22,7 +22,7 @@ def compile_code():
     # Call your C++ compiler executable with the filename
     # Make sure 'com' is the compiled executable from com.cpp in the same directory
     try:
-        result = subprocess.run(['./tushi', filename], capture_output=True, text=True, timeout=10)
+        result = subprocess.run(['./minicompiler', filename], capture_output=True, text=True, timeout=10)
         output = result.stdout
     except Exception as e:
         output = f"Error running compiler: {e}"
